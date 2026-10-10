@@ -15,7 +15,7 @@ set -euo pipefail
 
 APP_NAME=Pane
 BUNDLE_ID=sh.saad.pane
-GH_REPO="${GH_REPO:-saadjs/pane}"
+GH_REPO="${GH_REPO:-saadjs/pane-wm}"
 TAP_REPO="${TAP_REPO:-saadjs/homebrew-tap}"
 TAP_DIR="${TAP_DIR:-$HOME/src/homebrew-tap}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-pane-notary}"
