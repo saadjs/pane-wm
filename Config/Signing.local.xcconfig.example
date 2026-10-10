@@ -1,0 +1,4 @@
+// Copy to Signing.local.xcconfig and set your Apple Developer Team ID. A stable signing
+// identity keeps the Accessibility grant across rebuilds.
+DEVELOPMENT_TEAM = XXXXXXXXXX
+CODE_SIGN_IDENTITY = Apple Development

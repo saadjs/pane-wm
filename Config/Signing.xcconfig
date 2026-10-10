@@ -1,0 +1,5 @@
+// Shared signing configuration. Without a team, builds are signed to run locally; macOS then
+// asks for Accessibility access again after every build. Developer-specific values belong in
+// the optional, Git-ignored file below.
+CODE_SIGN_IDENTITY = -
+#include? "Signing.local.xcconfig"

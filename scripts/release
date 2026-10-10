@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# Build, Developer ID sign, notarize, staple, and zip Pane.app for the Homebrew cask.
+#
+# Usage: scripts/release [version] [--publish] [--skip-notarize]
+#
+#   version          defaults to project.yml's MARKETING_VERSION
+#   --publish        also create the GitHub release and push Casks/pane.rb to the tap
+#   --skip-notarize  stop short of Apple's notary service, to rehearse the build; the
+#                    result is not distributable
+#
+# Auth, one time:
+#   xcrun notarytool store-credentials pane-notary \
+#     --key <AuthKey_XXXX.p8> --key-id <key-id> --issuer <issuer-id>
+set -euo pipefail
+
+APP_NAME=Pane
+BUNDLE_ID=sh.saad.pane
+GH_REPO="${GH_REPO:-saadjs/pane}"
+TAP_REPO="${TAP_REPO:-saadjs/homebrew-tap}"
+TAP_DIR="${TAP_DIR:-$HOME/src/homebrew-tap}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-pane-notary}"
+
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+VERSION=""
+PUBLISH=false
+NOTARIZE=true
+for argument in "$@"; do
+  case "$argument" in
+    --publish) PUBLISH=true ;;
+    --skip-notarize) NOTARIZE=false ;;
+    -*) echo "unknown option: $argument" >&2; exit 1 ;;
+    *) VERSION="$argument" ;;
+  esac
+done
+VERSION="${VERSION:-$(awk '/^ *MARKETING_VERSION:/{print $2; exit}' "$ROOT/project.yml")}"
+
+if $PUBLISH; then
+  $NOTARIZE || { echo "--publish needs a notarized build" >&2; exit 1; }
+  [ -d "$TAP_DIR/Casks" ] || { echo "tap checkout not found at $TAP_DIR (set TAP_DIR)" >&2; exit 1; }
+  [ -z "$(git -C "$ROOT" status --porcelain)" ] || { echo "commit or stash your changes first" >&2; exit 1; }
+  git -C "$ROOT" fetch --quiet origin
+  [ "$(git -C "$ROOT" rev-parse HEAD)" = "$(git -C "$ROOT" rev-parse '@{upstream}')" ] \
+    || { echo "push this branch first: the release tag is created from the remote" >&2; exit 1; }
+  [ -z "$(git -C "$TAP_DIR" status --porcelain)" ] || { echo "$TAP_DIR has uncommitted changes" >&2; exit 1; }
+fi
+
+TEAM_ID=$(awk -F' *= *' '/^DEVELOPMENT_TEAM/{print $2; exit}' "$ROOT/Config/Signing.local.xcconfig" 2>/dev/null || true)
+[ -n "$TEAM_ID" ] || { echo "set DEVELOPMENT_TEAM in Config/Signing.local.xcconfig" >&2; exit 1; }
+
+BUILD="$ROOT/build/release"
+ARCHIVE="$BUILD/$APP_NAME.xcarchive"
+EXPORT="$BUILD/export"
+APP="$EXPORT/$APP_NAME.app"
+ZIP="$BUILD/$APP_NAME-$VERSION.zip"
+CASK="$BUILD/pane.rb"
+
+rm -rf "$BUILD"
+mkdir -p "$BUILD"
+
+cat > "$BUILD/ExportOptions.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>developer-id</string>
+    <key>teamID</key>
+    <string>$TEAM_ID</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+    <key>signingCertificate</key>
+    <string>Developer ID Application</string>
+</dict>
+</plist>
+PLIST
+
+printf '==> Archiving %s %s\n' "$APP_NAME" "$VERSION"
+xcodegen generate --quiet --spec "$ROOT/project.yml"
+xcodebuild archive \
+  -project "$ROOT/$APP_NAME.xcodeproj" \
+  -scheme "$APP_NAME" \
+  -configuration Release \
+  -destination 'generic/platform=macOS' \
+  -derivedDataPath "$ROOT/build/DerivedData" \
+  -archivePath "$ARCHIVE" \
+  -quiet \
+  MARKETING_VERSION="$VERSION"
+
+printf '==> Exporting Developer ID build\n'
+xcodebuild -exportArchive \
+  -archivePath "$ARCHIVE" \
+  -exportPath "$EXPORT" \
+  -exportOptionsPlist "$BUILD/ExportOptions.plist" \
+  -quiet
+
+printf '==> Verifying the signature\n'
+codesign --verify --strict --verbose=2 "$APP"
+# Matched on captured output: grep -q can SIGPIPE codesign, which pipefail reads as failure.
+SIGNATURE=$(codesign -dvv "$APP" 2>&1)
+case "$SIGNATURE" in
+  *"Identifier=$BUNDLE_ID"$'\n'*) ;;
+  *) echo "unexpected bundle identifier in $APP" >&2; exit 1 ;;
+esac
+case "$SIGNATURE" in
+  *flags=*runtime*) ;;
+  *) echo "hardened runtime not enabled on $APP" >&2; exit 1 ;;
+esac
+# macOS ties the Accessibility grant to this identity; anything else makes users re-grant it.
+case "$SIGNATURE" in
+  *"Authority=Developer ID Application:"*) ;;
+  *) echo "$APP is not signed with a Developer ID Application certificate" >&2; exit 1 ;;
+esac
+
+if $NOTARIZE; then
+  printf '==> Notarizing (this takes a few minutes)\n'
+  ditto -c -k --keepParent "$APP" "$BUILD/submit.zip"
+  xcrun notarytool submit "$BUILD/submit.zip" --keychain-profile "$NOTARY_PROFILE" --wait
+  rm -f "$BUILD/submit.zip"
+
+  printf '==> Stapling\n'
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  spctl --assess --type execute --verbose=2 "$APP"
+else
+  printf '==> Skipping notarization: this build is for rehearsal only\n'
+fi
+
+printf '==> Packaging\n'
+ditto -c -k --keepParent "$APP" "$ZIP"
+SHA=$(shasum -a 256 "$ZIP" | awk '{print $1}')
+
+cat > "$CASK" <<RUBY
+# frozen_string_literal: true
+
+cask "pane" do
+  version "$VERSION"
+  sha256 "$SHA"
+
+  url "https://github.com/$GH_REPO/releases/download/v#{version}/$APP_NAME-#{version}.zip"
+  name "Pane"
+  desc "Menu bar app for switching apps and arranging windows with shortcuts"
+  homepage "https://github.com/$GH_REPO"
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  depends_on macos: :sonoma
+
+  app "Pane.app"
+
+  uninstall quit: "$BUNDLE_ID"
+
+  zap trash: [
+    "~/Library/Application Support/$BUNDLE_ID",
+    "~/Library/Preferences/$BUNDLE_ID.plist",
+  ]
+
+  caveats <<~EOS
+    Open Pane, choose Open Settings…, and turn on Pane under
+    Privacy & Security → Accessibility so it can move and focus windows.
+  EOS
+end
+RUBY
+
+cat <<SUMMARY
+
+==> Built.
+  Artifact : $ZIP
+  Version  : $VERSION
+  sha256   : $SHA
+  Cask     : $CASK
+SUMMARY
+
+if ! $PUBLISH; then
+  $NOTARIZE && printf '\nRun again with --publish to release it.\n'
+  exit 0
+fi
+
+printf '==> Creating GitHub release v%s\n' "$VERSION"
+gh release create "v$VERSION" "$ZIP" --repo "$GH_REPO" --title "v$VERSION" --generate-notes
+
+printf '==> Updating %s\n' "$TAP_REPO"
+git -C "$TAP_DIR" pull --quiet --ff-only
+if [ -f "$TAP_DIR/Casks/pane.rb" ]; then MESSAGE="Update Pane to $VERSION"; else MESSAGE="Add pane cask"; fi
+cp "$CASK" "$TAP_DIR/Casks/pane.rb"
+git -C "$TAP_DIR" add Casks/pane.rb
+git -C "$TAP_DIR" commit --quiet -m "$MESSAGE"
+git -C "$TAP_DIR" push --quiet
+
+printf '\n==> Published. Install with: brew install --cask %s/pane\n' "${TAP_REPO/homebrew-/}"

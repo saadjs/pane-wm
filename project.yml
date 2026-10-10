@@ -1,0 +1,63 @@
+name: Pane
+options:
+  bundleIdPrefix: sh.saad
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  PaneCore:
+    path: .
+
+targets:
+  Pane:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/Pane
+    dependencies:
+      - package: PaneCore
+        product: PaneCore
+    settings:
+      base:
+        PRODUCT_NAME: Pane
+      configs:
+        # Debug builds get their own identity, so they keep a separate Accessibility grant and
+        # settings file from an installed release.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: sh.saad.pane.dev
+          PANE_DISPLAY_NAME: Pane Dev
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: sh.saad.pane
+          PANE_DISPLAY_NAME: Pane
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDisplayName: "$(PANE_DISPLAY_NAME)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSApplicationCategoryType: public.app-category.productivity
+        LSUIElement: true
+        NSHumanReadableCopyright: Copyright © 2026 Pane contributors. MIT License.
+
+schemes:
+  Pane:
+    build:
+      targets:
+        Pane: all
+    run:
+      config: Debug
+    archive:
+      config: Release
