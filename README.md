@@ -3,7 +3,7 @@
 A small, native macOS menu bar app for switching apps and arranging windows with your own keyboard shortcuts.
 
 - **App shortcuts:** one shortcut per app. It launches the app, brings it forward, restores it if minimized or hidden, and cycles through its windows when pressed again.
-- **Window shortcuts:** halves, maximize, almost maximize, center, grow or shrink, and move to another display, with a configurable gap.
+- **Window shortcuts:** halves, quarters, thirds, maximize, almost maximize, center, grow or shrink, and move to another display, with a configurable gap.
 - **Native and light:** SwiftUI and AppKit only, no dependencies, no network access, no telemetry. Idle, it uses no CPU.
 
 Requires macOS 14 Sonoma or later.
@@ -20,14 +20,18 @@ brew install --cask saadjs/tap/pane
 2. Choose **Open Settings…** in the banner and turn on Pane under **Privacy & Security → Accessibility**. macOS requires this for any app that moves or focuses other apps' windows. Pane notices the change within a second; its menu bar symbol is a warning triangle while access is missing.
 3. Under **Apps**, add an app, click **Record**, and press the shortcut you want. Escape cancels; the ⓧ button clears it.
 4. Under **Windows**, choose **Use Default Shortcuts** or record your own.
-5. Under **General**, adjust the gap, the almost-maximize inset, the resize step, and launch at login.
+5. Under **General**, adjust the gap, the almost-maximize inset, the resize step, size cycling, and launch at login.
 
 ### Default window shortcuts
 
 | Action | Shortcut | Behavior |
 | --- | --- | --- |
-| Left / right half | ⌃⌥← / ⌃⌥→ | Tile into that half, with the gap between halves and at screen edges. |
+| Left / right half | ⌃⌥← / ⌃⌥→ | Tile into that half, with the gap between halves and at screen edges. Press again for two thirds, then one third, then back to half. |
 | Top / bottom half | ⌃⌥↑ / ⌃⌥↓ | Same, vertically. |
+| Top left / top right | ⌃⌥U / ⌃⌥I | Tile into that quarter. |
+| Bottom left / bottom right | ⌃⌥J / ⌃⌥K | Same, along the bottom. |
+| Left / center / right third | ⌃⌥D / ⌃⌥F / ⌃⌥G | Tile into that third of the width, full height. |
+| Left / right two thirds | ⌃⌥E / ⌃⌥T | Tile into two thirds of the width, full height. |
 | Maximize | ⌃⌥↩ | Fill the desktop around the menu bar and Dock. Not full screen; no new Space. |
 | Almost maximize | ⌃⌥⇧↩ | Fill the desktop with the configured inset on each side. |
 | Center | ⌃⌥C | Center the window, keeping its size. |

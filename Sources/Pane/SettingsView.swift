@@ -114,27 +114,32 @@ struct SettingsView: View {
     }
 
     private var windowSettings: some View {
-        Section {
-            ForEach(WindowAction.allCases) { action in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 10) {
-                        Image(systemName: action.symbol)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22)
-                            .accessibilityHidden(true)
-                        Text(action.title)
-                        Spacer(minLength: 8)
-                        ShortcutControl(model: model, target: .window(action), name: action.title)
+        ForEach(WindowAction.Group.allCases) { group in
+            Section {
+                ForEach(group.actions) { action in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 10) {
+                            Image(systemName: action.symbol)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 22)
+                                .accessibilityHidden(true)
+                            Text(action.title)
+                            Spacer(minLength: 8)
+                            ShortcutControl(model: model, target: .window(action), name: action.title)
+                        }
+                        shortcutError(.window(action))
                     }
-                    shortcutError(.window(action))
                 }
-            }
-        } footer: {
-            if model.configuration.windowShortcuts.count < WindowAction.allCases.count {
-                HStack {
-                    Spacer()
-                    Button("Use Default Shortcuts") { model.assignDefaultWindowShortcuts() }
-                        .help("Fill unassigned actions with ⌃⌥ shortcuts")
+            } header: {
+                Text(group.rawValue)
+            } footer: {
+                if group == WindowAction.Group.allCases.last,
+                   model.configuration.windowShortcuts.count < WindowAction.allCases.count {
+                    HStack {
+                        Spacer()
+                        Button("Use Default Shortcuts") { model.assignDefaultWindowShortcuts() }
+                            .help("Fill unassigned actions with ⌃⌥ shortcuts")
+                    }
                 }
             }
         }
@@ -146,6 +151,10 @@ struct SettingsView: View {
                 valueSlider("Gap", value: $model.configuration.layout.gap, range: 0...80, step: 1)
                 valueSlider("Almost maximize inset", value: $model.configuration.layout.maximizeInset, range: 0...160, step: 4)
                 valueSlider("Resize step", value: $model.configuration.layout.resizeStep, range: 10...200, step: 10)
+                Toggle(isOn: $model.configuration.layout.cycleSizes) {
+                    Text("Cycle sizes")
+                    Text("Pressing a half’s shortcut again steps through two thirds and one third.")
+                }
             }
             Section {
                 Toggle("Launch at login", isOn: launchAtLogin)

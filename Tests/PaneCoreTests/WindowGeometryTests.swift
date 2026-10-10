@@ -39,6 +39,86 @@ struct WindowGeometryTests {
         #expect(left.maxX == right.minX)
     }
 
+    @Test func thirdsHaveEqualWidthsAndExactGaps() {
+        let thirds = [WindowAction.leftThird, .centerThird, .rightThird].map { frame($0) }
+        #expect(thirds[0].minX - desktop.minX == 12)
+        #expect(thirds[1].minX - thirds[0].maxX == 12)
+        #expect(thirds[2].minX - thirds[1].maxX == 12)
+        #expect(desktop.maxX - thirds[2].maxX == 12)
+        #expect(thirds.allSatisfy { $0.width == 464 && $0.minY == desktop.minY + 12 && $0.maxY == desktop.maxY - 12 })
+    }
+
+    @Test func twoThirdsSitBesideTheOppositeThird() {
+        #expect(frame(.leftTwoThirds).minX == frame(.leftThird).minX)
+        #expect(frame(.leftTwoThirds).maxX == frame(.centerThird).maxX)
+        #expect(frame(.rightThird).minX - frame(.leftTwoThirds).maxX == 12)
+        #expect(frame(.rightTwoThirds).minX - frame(.leftThird).maxX == 12)
+        #expect(frame(.rightTwoThirds).maxX == frame(.rightThird).maxX)
+    }
+
+    @Test func quartersShareTheEdgesOfTheHalves() {
+        let topLeft = frame(.topLeft), bottomRight = frame(.bottomRight)
+        #expect(topLeft.minX == frame(.leftHalf).minX && topLeft.maxX == frame(.leftHalf).maxX)
+        #expect(topLeft.minY == frame(.topHalf).minY && topLeft.maxY == frame(.topHalf).maxY)
+        #expect(bottomRight.minX == frame(.rightHalf).minX && bottomRight.maxX == frame(.rightHalf).maxX)
+        #expect(bottomRight.minY == frame(.bottomHalf).minY && bottomRight.maxY == frame(.bottomHalf).maxY)
+        #expect(frame(.topRight).minX == bottomRight.minX && frame(.topRight).minY == topLeft.minY)
+        #expect(frame(.bottomLeft).minX == topLeft.minX && frame(.bottomLeft).minY == bottomRight.minY)
+    }
+
+    @Test func zeroGapQuartersCoverTheDesktop() {
+        let quarters = [WindowAction.topLeft, .topRight, .bottomLeft, .bottomRight].map { frame($0, preferences: .init(gap: 0)) }
+        #expect(quarters.reduce(CGRect.null) { $0.union($1) } == desktop)
+        #expect(quarters.allSatisfy { $0.width == desktop.width / 2 && $0.height == desktop.height / 2 })
+    }
+
+    @Test func repeatingAHorizontalHalfCyclesThroughTwoThirdsAndAThird() {
+        let half = frame(.leftHalf)
+        let twoThirds = frame(.leftHalf, current: half)
+        let third = frame(.leftHalf, current: twoThirds)
+        #expect(twoThirds == frame(.leftTwoThirds))
+        #expect(third == frame(.leftThird))
+        #expect(frame(.leftHalf, current: third) == half)
+
+        let right = frame(.rightHalf, current: frame(.rightHalf))
+        #expect(right == frame(.rightTwoThirds))
+        #expect(frame(.rightHalf, current: right) == frame(.rightThird))
+    }
+
+    @Test func repeatingAVerticalHalfCyclesItsHeight() {
+        let half = frame(.bottomHalf)
+        let twoThirds = frame(.bottomHalf, current: half)
+        let third = frame(.bottomHalf, current: twoThirds)
+        #expect(twoThirds.height > half.height && third.height < half.height)
+        #expect(abs(twoThirds.height - (third.height * 2 + 12)) < 0.001)
+        #expect([half, twoThirds, third].allSatisfy { $0.maxY == desktop.maxY - 12 && $0.width == desktop.width - 24 })
+        #expect(frame(.bottomHalf, current: third) == half)
+    }
+
+    @Test func cyclingToleratesWindowsThatResizeInSteps() {
+        var half = frame(.leftHalf)
+        half.size.width -= 9
+        half.size.height -= 14
+        #expect(frame(.leftHalf, current: half) == frame(.leftTwoThirds))
+    }
+
+    @Test func aHalfOnTheOtherSideStartsAtHalf() {
+        #expect(frame(.leftHalf, current: frame(.rightHalf)) == frame(.leftHalf))
+        #expect(frame(.leftHalf, current: frame(.leftThird)) == frame(.leftHalf))
+    }
+
+    @Test func halvesStayPutWhenCyclingIsOff() {
+        let off = LayoutPreferences(cycleSizes: false)
+        let half = frame(.leftHalf, preferences: off)
+        #expect(frame(.leftHalf, current: half, preferences: off) == half)
+    }
+
+    @Test func repeatingOtherTilesDoesNotMoveThem() {
+        for action in [WindowAction.topLeft, .centerThird, .rightTwoThirds] {
+            #expect(frame(action, current: frame(action)) == frame(action))
+        }
+    }
+
     @Test func centerPreservesSizeEvenForOversizedWindows() {
         let large = CGRect(x: 0, y: 0, width: 2000, height: 1000)
         let result = frame(.center, current: large)
@@ -111,17 +191,25 @@ struct WindowGeometryTests {
         #expect(WindowGeometry.screenIndex(after: 1, step: -1, screens: screens) == 0)
     }
 
-    @Test(arguments: [WindowAction.maximize, .almostMaximize, .leftHalf, .rightHalf, .topHalf, .bottomHalf])
+    @Test(arguments: [
+        WindowAction.maximize, .almostMaximize, .leftHalf, .rightHalf, .topHalf, .bottomHalf,
+        .topLeft, .bottomRight, .leftThird, .centerThird, .rightTwoThirds,
+    ])
     func tiledWindowsStayTiledOnTheNewDisplay(_ action: WindowAction) {
         let tiled = frame(action)
-        #expect(moved(tiled) == WindowGeometry.frame(for: action, current: tiled, visible: other, preferences: .init()))
+        #expect(moved(tiled) == WindowGeometry.frame(for: action, current: current, visible: other, preferences: .init()))
+    }
+
+    @Test func aHalfCycledToTwoThirdsKeepsThatSizeOnTheNewDisplay() {
+        let twoThirds = frame(.leftHalf, current: frame(.leftHalf))
+        #expect(moved(twoThirds) == WindowGeometry.frame(for: .leftTwoThirds, current: current, visible: other, preferences: .init()))
     }
 
     @Test func windowsThatResizeInStepsStillCountAsTiled() {
         var tiled = frame(.rightHalf)
         tiled.size.width -= 9
         tiled.size.height -= 14
-        #expect(moved(tiled) == WindowGeometry.frame(for: .rightHalf, current: tiled, visible: other, preferences: .init()))
+        #expect(moved(tiled) == WindowGeometry.frame(for: .rightHalf, current: current, visible: other, preferences: .init()))
     }
 
     @Test func freeWindowsKeepTheirSizeAndRelativePlace() {

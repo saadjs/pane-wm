@@ -61,9 +61,20 @@ struct ConfigurationTests {
         var configuration = Configuration()
         configuration.apps = [.init(name: "Safari", bundleIdentifier: "com.apple.Safari", shortcut: .init(keyCode: 18, modifiers: Shortcut.control, keyLabel: "1"))]
         configuration.windowShortcuts[.leftHalf] = .init(keyCode: 123, modifiers: Shortcut.option, keyLabel: "←")
-        configuration.layout = .init(gap: 8, maximizeInset: 24, resizeStep: 60)
+        configuration.layout = .init(gap: 8, maximizeInset: 24, resizeStep: 60, cycleSizes: false)
         try store.save(configuration)
         #expect(try store.load() == configuration)
+    }
+
+    @Test func settingsSavedBeforeAPreferenceExistedStillLoad() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("settings.json")
+        let saved = #"{"apps":[],"layout":{"gap":8,"maximizeInset":24,"resizeStep":60},"version":1,"windowShortcuts":[]}"#
+        try Data(saved.utf8).write(to: url)
+        let layout = try SettingsStore(url: url).load().layout
+        #expect(layout == LayoutPreferences(gap: 8, maximizeInset: 24, resizeStep: 60, cycleSizes: true))
     }
 
     @Test func corruptSettingsRemainUntouched() throws {
