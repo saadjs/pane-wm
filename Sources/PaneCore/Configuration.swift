@@ -3,8 +3,18 @@ import Foundation
 public enum WindowAction: String, Codable, CaseIterable, Identifiable, Sendable {
     case maximize, leftHalf, rightHalf, topHalf, bottomHalf
     case center, almostMaximize, smaller, bigger
+    case nextDisplay, previousDisplay
 
     public var id: Self { self }
+
+    /// The direction to move through the displays, for actions that send a window to another one.
+    public var displayStep: Int? {
+        switch self {
+        case .nextDisplay: 1
+        case .previousDisplay: -1
+        default: nil
+        }
+    }
 
     public var title: String {
         switch self {
@@ -17,6 +27,8 @@ public enum WindowAction: String, Codable, CaseIterable, Identifiable, Sendable 
         case .almostMaximize: "Almost maximize"
         case .smaller: "Make smaller"
         case .bigger: "Make bigger"
+        case .nextDisplay: "Next display"
+        case .previousDisplay: "Previous display"
         }
     }
 
@@ -31,6 +43,8 @@ public enum WindowAction: String, Codable, CaseIterable, Identifiable, Sendable 
         case .almostMaximize: "rectangle.inset.filled"
         case .smaller: "arrow.down.right.and.arrow.up.left"
         case .bigger: "arrow.up.left.and.arrow.down.right"
+        case .nextDisplay: "arrow.right.square"
+        case .previousDisplay: "arrow.left.square"
         }
     }
 }
@@ -62,7 +76,8 @@ public struct Shortcut: Codable, Equatable, Hashable, Sendable {
         keyCode == other.keyCode && modifiers == other.modifiers
     }
 
-    /// Rectangle-style defaults: Control + Option with arrows, Return, C, minus and equals.
+    /// Rectangle-style defaults: Control + Option with arrows, Return, C, minus and equals, plus
+    /// Command with the horizontal arrows to change display.
     public static let windowDefaults: [(WindowAction, Shortcut)] = {
         let base = control | option
         return [
@@ -75,6 +90,8 @@ public struct Shortcut: Codable, Equatable, Hashable, Sendable {
             (.center, Shortcut(keyCode: 8, modifiers: base, keyLabel: "C")),
             (.smaller, Shortcut(keyCode: 27, modifiers: base, keyLabel: "-")),
             (.bigger, Shortcut(keyCode: 24, modifiers: base, keyLabel: "=")),
+            (.nextDisplay, Shortcut(keyCode: 124, modifiers: base | command, keyLabel: "→")),
+            (.previousDisplay, Shortcut(keyCode: 123, modifiers: base | command, keyLabel: "←")),
         ]
     }()
 

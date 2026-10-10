@@ -21,10 +21,20 @@ final class WindowManager {
         }
         guard let index = WindowGeometry.screenIndex(for: current, screens: frames) else { return }
         // Read visibleFrame on every action: Dock position, auto-hide and menu bar can change.
-        let visible = WindowGeometry.accessibilityFrame(
-            from: screens[index].visibleFrame, primaryScreenTop: primary.frame.maxY
-        )
-        let target = WindowGeometry.frame(for: action, current: current, visible: visible, preferences: preferences)
+        func visibleFrame(_ index: Int) -> CGRect {
+            WindowGeometry.accessibilityFrame(from: screens[index].visibleFrame, primaryScreenTop: primary.frame.maxY)
+        }
+        let visible: CGRect
+        let target: CGRect
+        if let step = action.displayStep {
+            // With a single display there is nowhere to send the window.
+            guard let destination = WindowGeometry.screenIndex(after: index, step: step, screens: frames) else { return }
+            visible = visibleFrame(destination)
+            target = WindowGeometry.frame(moving: current, from: visibleFrame(index), to: visible, preferences: preferences)
+        } else {
+            visible = visibleFrame(index)
+            target = WindowGeometry.frame(for: action, current: current, visible: visible, preferences: preferences)
+        }
         guard Accessibility.isSettable(window, kAXPositionAttribute) else {
             throw WindowControlError.message("This window doesn’t support moving.")
         }

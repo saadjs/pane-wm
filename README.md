@@ -3,7 +3,7 @@
 A small, native macOS menu bar app for switching apps and arranging windows with your own keyboard shortcuts.
 
 - **App shortcuts:** one shortcut per app. It launches the app, brings it forward, restores it if minimized or hidden, and cycles through its windows when pressed again.
-- **Window shortcuts:** halves, maximize, almost maximize, center, and grow or shrink, with a configurable gap.
+- **Window shortcuts:** halves, maximize, almost maximize, center, grow or shrink, and move to another display, with a configurable gap.
 - **Native and light:** SwiftUI and AppKit only, no dependencies, no network access, no telemetry. Idle, it uses no CPU.
 
 Requires macOS 14 Sonoma or later.
@@ -32,6 +32,7 @@ brew install --cask saadjs/tap/pane
 | Almost maximize | ⌃⌥⇧↩ | Fill the desktop with the configured inset on each side. |
 | Center | ⌃⌥C | Center the window, keeping its size. |
 | Make smaller / bigger | ⌃⌥- / ⌃⌥= | Change width and height by the resize step around the window's center. |
+| Next / previous display | ⌃⌥⌘→ / ⌃⌥⌘← | Send the window to the display to the right or left, wrapping around. A tiled window stays tiled; any other keeps its size and relative place. |
 
 Shortcuts start unassigned, and every one can be changed. A shortcut must include Control, Option, or Command.
 

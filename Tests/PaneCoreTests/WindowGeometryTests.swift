@@ -91,6 +91,59 @@ struct WindowGeometryTests {
         #expect(WindowGeometry.screenIndex(for: current, screens: []) == nil)
     }
 
+    @Test func displaysAreOrderedLeftToRightAndWrap() {
+        // Listed primary first, as NSScreen does; the primary sits in the middle of the arrangement.
+        let screens = [
+            CGRect(x: 0, y: 0, width: 1440, height: 900),
+            CGRect(x: 1440, y: -200, width: 1920, height: 1080),
+            CGRect(x: -1280, y: 0, width: 1280, height: 800),
+        ]
+        #expect(WindowGeometry.screenIndex(after: 0, step: 1, screens: screens) == 1)
+        #expect(WindowGeometry.screenIndex(after: 1, step: 1, screens: screens) == 2)
+        #expect(WindowGeometry.screenIndex(after: 0, step: -1, screens: screens) == 2)
+        #expect(WindowGeometry.screenIndex(after: 2, step: -1, screens: screens) == 1)
+        #expect(WindowGeometry.screenIndex(after: 0, step: 1, screens: [screens[0]]) == nil)
+    }
+
+    @Test func stackedDisplaysAreOrderedTopToBottom() {
+        let screens = [CGRect(x: 0, y: 0, width: 1440, height: 900), CGRect(x: 0, y: -1080, width: 1440, height: 1080)]
+        #expect(WindowGeometry.screenIndex(after: 1, step: 1, screens: screens) == 0)
+        #expect(WindowGeometry.screenIndex(after: 1, step: -1, screens: screens) == 0)
+    }
+
+    @Test(arguments: [WindowAction.maximize, .almostMaximize, .leftHalf, .rightHalf, .topHalf, .bottomHalf])
+    func tiledWindowsStayTiledOnTheNewDisplay(_ action: WindowAction) {
+        let tiled = frame(action)
+        #expect(moved(tiled) == WindowGeometry.frame(for: action, current: tiled, visible: other, preferences: .init()))
+    }
+
+    @Test func windowsThatResizeInStepsStillCountAsTiled() {
+        var tiled = frame(.rightHalf)
+        tiled.size.width -= 9
+        tiled.size.height -= 14
+        #expect(moved(tiled) == WindowGeometry.frame(for: .rightHalf, current: tiled, visible: other, preferences: .init()))
+    }
+
+    @Test func freeWindowsKeepTheirSizeAndRelativePlace() {
+        #expect(moved(current).size == current.size)
+        let corner = CGRect(x: desktop.maxX - 600, y: desktop.maxY - 400, width: 600, height: 400)
+        #expect(moved(corner) == CGRect(x: other.maxX - 600, y: other.maxY - 400, width: 600, height: 400))
+        let centered = CGRect(x: desktop.midX - 300, y: desktop.midY - 200, width: 600, height: 400)
+        #expect(moved(centered).midX == other.midX)
+        #expect(moved(centered).midY == other.midY)
+    }
+
+    @Test func windowsLargerThanTheNewDisplayAreShrunkToFit() {
+        let small = CGRect(x: 0, y: 25, width: 500, height: 300)
+        let result = WindowGeometry.frame(moving: current, from: desktop, to: small, preferences: .init())
+        #expect(result == small)
+    }
+
+    @Test func partlyOffscreenWindowsLandInsideTheNewDisplay() {
+        let hanging = CGRect(x: desktop.minX - 300, y: desktop.maxY - 100, width: 600, height: 400)
+        #expect(other.contains(moved(hanging)))
+    }
+
     @Test func extremePreferencesNeverProduceNegativeSizes() {
         let visible = CGRect(x: 0, y: 0, width: 100, height: 70)
         let preferences = LayoutPreferences(gap: 80, maximizeInset: 160, resizeStep: 200)
@@ -99,6 +152,12 @@ struct WindowGeometryTests {
             #expect(result.width > 0 && result.height > 0)
             #expect(visible.contains(result))
         }
+    }
+
+    private let other = CGRect(x: 0, y: 25, width: 1920, height: 1055)
+
+    private func moved(_ window: CGRect) -> CGRect {
+        WindowGeometry.frame(moving: window, from: desktop, to: other, preferences: .init())
     }
 
     private func frame(_ action: WindowAction, current override: CGRect? = nil, preferences: LayoutPreferences = .init()) -> CGRect {
