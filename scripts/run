@@ -12,5 +12,11 @@ xcodebuild -project "$ROOT/Pane.xcodeproj" -scheme Pane -configuration Debug \
   -destination 'platform=macOS' -derivedDataPath "$ROOT/build/DerivedData" -quiet build
 
 # Only the Debug build: an installed release has a different bundle identifier.
-osascript -e 'tell application id "sh.saad.pane.dev" to quit' >/dev/null 2>&1 || true
+osascript -e 'with timeout of 5 seconds' -e 'tell application id "sh.saad.pane.dev" to quit' -e 'end timeout' \
+  >/dev/null 2>&1 || true
+for _ in $(seq 50); do
+  pgrep -qf "$APP/Contents/MacOS/Pane" || break
+  sleep 0.1
+done
+pkill -9 -f "$APP/Contents/MacOS/Pane" || true
 open "$APP" --args --settings

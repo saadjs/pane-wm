@@ -24,19 +24,19 @@ brew install --cask saadjs/tap/pane
 
 ### Default window shortcuts
 
-| Action | Shortcut | Behavior |
-| --- | --- | --- |
-| Left / right half | ⌃⌥← / ⌃⌥→ | Tile into that half, with the gap between halves and at screen edges. Press again for two thirds, then one third, then back to half. |
-| Top / bottom half | ⌃⌥↑ / ⌃⌥↓ | Same, vertically. |
-| Top left / top right | ⌃⌥U / ⌃⌥I | Tile into that quarter. |
-| Bottom left / bottom right | ⌃⌥J / ⌃⌥K | Same, along the bottom. |
-| Left / center / right third | ⌃⌥D / ⌃⌥F / ⌃⌥G | Tile into that third of the width, full height. |
-| Left / right two thirds | ⌃⌥E / ⌃⌥T | Tile into two thirds of the width, full height. |
-| Maximize | ⌃⌥↩ | Fill the desktop around the menu bar and Dock. Not full screen; no new Space. |
-| Almost maximize | ⌃⌥⇧↩ | Fill the desktop with the configured inset on each side. |
-| Center | ⌃⌥C | Center the window, keeping its size. |
-| Make smaller / bigger | ⌃⌥- / ⌃⌥= | Change width and height by the resize step around the window's center. |
-| Next / previous display | ⌃⌥⌘→ / ⌃⌥⌘← | Send the window to the display to the right or left, wrapping around. A tiled window stays tiled; any other keeps its size and relative place. |
+| Action                      | Shortcut        | Behavior                                                                                                                                       |
+| --------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Left / right half           | ⌃⌥← / ⌃⌥→       | Tile into that half, with the gap between halves and at screen edges. Press again for two thirds, then one third, then back to half.           |
+| Top / bottom half           | ⌃⌥↑ / ⌃⌥↓       | Same, vertically.                                                                                                                              |
+| Top left / top right        | ⌃⌥U / ⌃⌥I       | Tile into that quarter.                                                                                                                        |
+| Bottom left / bottom right  | ⌃⌥J / ⌃⌥K       | Same, along the bottom.                                                                                                                        |
+| Left / center / right third | ⌃⌥D / ⌃⌥F / ⌃⌥G | Tile into that third of the width, full height.                                                                                                |
+| Left / right two thirds     | ⌃⌥E / ⌃⌥T       | Tile into two thirds of the width, full height.                                                                                                |
+| Maximize                    | ⌃⌥↩             | Fill the desktop around the menu bar and Dock. Not full screen; no new Space.                                                                  |
+| Almost maximize             | ⌃⌥⇧↩            | Fill the desktop with the configured inset on each side.                                                                                       |
+| Center                      | ⌃⌥C             | Center the window, keeping its size.                                                                                                           |
+| Make smaller / bigger       | ⌃⌥- / ⌃⌥=       | Change width and height by the resize step around the window's center.                                                                         |
+| Next / previous display     | ⌃⌥⌘→ / ⌃⌥⌘←     | Send the window to the display to the right or left, wrapping around. A tiled window stays tiled; any other keeps its size and relative place. |
 
 Shortcuts start unassigned, and every one can be changed. A shortcut must include Control, Option, or Command.
 
@@ -47,7 +47,14 @@ Shortcuts start unassigned, and every one can be changed. A shortcut must includ
 - Full-screen windows are left alone.
 - A warning appears next to a shortcut that macOS could not register, or that an enabled macOS shortcut (Mission Control, Spotlight, screenshots…) also uses.
 - Shortcuts are stored as physical keys; their labels use the keyboard layout active when you recorded them.
-- Settings live in `~/Library/Application Support/sh.saad.pane/settings.json`. A file Pane can't read is reported and left untouched.
+
+### Settings file
+
+Everything is stored in `~/.config/pane/settings.json`, so it can live with your dotfiles.
+
+- Edits to the file apply right away, with no restart, and so does adding the file. Any key you leave out keeps its default.
+- A file Pane can't read is reported in settings, with the reason, and left untouched. The settings already in use keep working until it's fixed.
+- **General → Import…** replaces the current settings with a file's; **Export…** saves a copy.
 
 ## Build from source
 

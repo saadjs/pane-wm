@@ -71,7 +71,7 @@ struct ConfigurationTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("settings.json")
-        let saved = #"{"apps":[],"layout":{"gap":8,"maximizeInset":24,"resizeStep":60},"version":1,"windowShortcuts":[]}"#
+        let saved = #"{"apps":[],"layout":{"gap":8,"maximizeInset":24,"resizeStep":60},"version":1,"windowShortcuts":{}}"#
         try Data(saved.utf8).write(to: url)
         let layout = try SettingsStore(url: url).load().layout
         #expect(layout == LayoutPreferences(gap: 8, maximizeInset: 24, resizeStep: 60, cycleSizes: true))
@@ -103,5 +103,71 @@ struct ConfigurationTests {
         configuration.version = 2
         try store.save(configuration)
         #expect(throws: SettingsStore.SettingsError.unsupportedVersion) { try store.load() }
+    }
+
+    @Test func windowShortcutsAreSavedByActionName() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SettingsStore(url: directory.appendingPathComponent("settings.json"))
+        var configuration = Configuration()
+        configuration.windowShortcuts[.leftHalf] = .init(keyCode: 123, modifiers: Shortcut.option, keyLabel: "←")
+        try store.save(configuration)
+        let saved = try JSONSerialization.jsonObject(with: Data(contentsOf: store.url)) as? [String: Any]
+        let shortcuts = try #require(saved?["windowShortcuts"] as? [String: [String: Any]])
+        #expect(shortcuts["leftHalf"]?["keyCode"] as? Int == 123)
+    }
+
+    @Test func handWrittenSettingsMayOmitKeys() throws {
+        let configuration = try load(#"{"layout":{"gap":4}}"#)
+        #expect(configuration.layout.gap == 4)
+        #expect(configuration.apps.isEmpty)
+        #expect(configuration.windowShortcuts.isEmpty)
+    }
+
+    @Test func invalidSettingsSayWhatIsWrong() {
+        #expect(throws: SettingsStore.SettingsError.invalid("windowShortcuts: “leftHlaf” is not a window action.")) {
+            try load(#"{"windowShortcuts":{"leftHlaf":{"keyCode":1,"keyLabel":"S","modifiers":4352}}}"#)
+        }
+        #expect(throws: SettingsStore.SettingsError.invalid("windowShortcuts.center: “keyCode” is missing.")) {
+            try load(#"{"windowShortcuts":{"center":{"keyLabel":"C","modifiers":4352}}}"#)
+        }
+    }
+
+    @Test func savingWritesThroughASymlink() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let target = directory.appendingPathComponent("dotfiles/settings.json")
+        let link = directory.appendingPathComponent("config/settings.json")
+        for url in [target, link] {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
+        try Data("{}".utf8).write(to: target)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        var configuration = Configuration()
+        configuration.layout.gap = 4
+        try SettingsStore(url: link).save(configuration)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == target.path)
+        #expect(try SettingsStore(url: target).load() == configuration)
+    }
+
+    @Test func settingsListingAnAppTwiceAreRejected() {
+        let safari = #"{"id":"6F1E0B1C-0000-4000-8000-000000000001","name":"Safari","bundleIdentifier":"com.apple.Safari"}"#
+        let notes = #"{"id":"6F1E0B1C-0000-4000-8000-000000000001","name":"Notes","bundleIdentifier":"com.apple.Notes"}"#
+        let again = #"{"id":"6F1E0B1C-0000-4000-8000-000000000002","name":"Safari","bundleIdentifier":"com.apple.Safari"}"#
+        #expect(throws: SettingsStore.SettingsError.invalid("Safari and Notes have the same id.")) {
+            try load(#"{"apps":[\#(safari),\#(notes)]}"#)
+        }
+        #expect(throws: SettingsStore.SettingsError.invalid("Safari is listed more than once.")) {
+            try load(#"{"apps":[\#(safari),\#(again)]}"#)
+        }
+    }
+
+    private func load(_ json: String) throws -> Configuration {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("settings.json")
+        try Data(json.utf8).write(to: url)
+        return try SettingsStore(url: url).load()
     }
 }

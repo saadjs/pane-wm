@@ -10,9 +10,10 @@ import UniformTypeIdentifiers
 final class PaneModel {
     var configuration: Configuration {
         didSet {
-            guard settingsLoadError == nil else { return }
-            do { try store.save(configuration) }
-            catch { alert = "Couldn’t save settings: \(error.localizedDescription)" }
+            if !isReloading, settingsLoadError == nil {
+                do { try store.save(configuration) }
+                catch { alert = "Couldn’t save settings: \(error.localizedDescription)" }
+            }
             // Dragging a layout slider shouldn't re-register every hotkey on each tick.
             if configuration.apps != oldValue.apps || configuration.windowShortcuts != oldValue.windowShortcuts {
                 updateHotKeys()
@@ -32,6 +33,9 @@ final class PaneModel {
     private static let bundleIdentifier = Bundle.main.bundleIdentifier ?? "sh.saad.pane"
     private static let log = Logger(subsystem: bundleIdentifier, category: "actions")
     @ObservationIgnored private let store: SettingsStore
+    var settingsURL: URL { store.url }
+    @ObservationIgnored private var watcher: FileWatcher?
+    @ObservationIgnored private var isReloading = false
     @ObservationIgnored private let hotKeys = HotKeyManager()
     @ObservationIgnored private let windows = WindowManager()
     @ObservationIgnored private let applications = ApplicationManager()
@@ -39,13 +43,17 @@ final class PaneModel {
     @ObservationIgnored var showSettings: (() -> Void)?
 
     init() {
-        let support = URL.applicationSupportDirectory.appendingPathComponent(Self.bundleIdentifier, isDirectory: true)
-        store = SettingsStore(url: support.appendingPathComponent("settings.json"))
+        let directory = Self.bundleIdentifier.hasSuffix(".dev") ? "pane-dev" : "pane"
+        let store = SettingsStore(
+            url: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/\(directory)/settings.json")
+        )
+        self.store = store
         do { configuration = try store.load() }
         catch {
             configuration = Configuration()
-            settingsLoadError = "Couldn’t read settings: \(error.localizedDescription) Your existing file has been preserved."
+            settingsLoadError = Self.loadError(error)
         }
+        watchSettings()
         hotKeys.onTrigger = { [weak self] target in self?.perform(target) }
         updateHotKeys()
         // macOS posts this whenever any app's Accessibility permission changes, so no polling is needed.
@@ -178,14 +186,70 @@ final class PaneModel {
     }
 
     func revealSettings() {
+        if !FileManager.default.fileExists(atPath: store.url.path) {
+            do { try store.save(configuration) }
+            catch { alert = "Couldn’t save settings: \(error.localizedDescription)" }
+        }
         NSWorkspace.shared.activateFileViewerSelecting([store.url])
+    }
+
+    private static func loadError(_ error: any Error) -> String {
+        "Couldn’t read settings: \(error.localizedDescription) Your existing file has been preserved."
+    }
+
+    private func watchSettings() {
+        let files: Set = [store.url, store.url.resolvingSymlinksInPath()]
+        guard watcher?.files != files else { return }
+        watcher = FileWatcher(files: files) { [weak self] in
+            MainActor.assumeIsolated { self?.reloadSettings() }
+        }
+    }
+
+    private func reloadSettings() {
+        watchSettings()
+        guard FileManager.default.fileExists(atPath: store.url.path) else {
+            if settingsLoadError != nil { settingsLoadError = nil }
+            return
+        }
+        do {
+            let loaded = try store.load()
+            if settingsLoadError != nil { settingsLoadError = nil }
+            guard loaded != configuration else { return }
+            isReloading = true
+            defer { isReloading = false }
+            configuration = loaded
+        } catch {
+            settingsLoadError = Self.loadError(error)
+        }
+    }
+
+    func importSettings() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Settings"
+        panel.message = "Importing replaces your current apps, shortcuts and layout."
+        panel.prompt = "Import"
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { configuration = try SettingsStore(url: url).load() }
+        catch { alert = "Couldn’t import settings: \(error.localizedDescription)" }
+    }
+
+    func exportSettings() {
+        let panel = NSSavePanel()
+        panel.title = "Export Settings"
+        panel.prompt = "Export"
+        panel.nameFieldStringValue = "Pane Settings.json"
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { try SettingsStore(url: url).save(configuration) }
+        catch { alert = "Couldn’t export settings: \(error.localizedDescription)" }
     }
 
     /// Re-registers so conflicts that came or went (another app quit, a macOS shortcut toggled) show up.
     func retryShortcuts() { updateHotKeys() }
 
     private func updateHotKeys() {
-        guard !isRecordingShortcut, settingsLoadError == nil else {
+        guard !isRecordingShortcut else {
             hotKeys.unregister()
             return
         }

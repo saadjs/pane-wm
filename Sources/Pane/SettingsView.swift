@@ -162,6 +162,23 @@ struct SettingsView: View {
                     Button("Approve in Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                 }
             }
+            Section {
+                LabeledContent("Settings file") {
+                    Text((model.settingsURL.path as NSString).abbreviatingWithTildeInPath)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .help(model.settingsURL.path)
+                }
+            } footer: {
+                HStack {
+                    Text("Edits to this file apply right away.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reveal") { model.revealSettings() }
+                    Button("Import…") { model.importSettings() }
+                    Button("Export…") { model.exportSettings() }
+                }
+            }
         }
     }
 

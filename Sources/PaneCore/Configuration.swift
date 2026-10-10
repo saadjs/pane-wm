@@ -207,12 +207,50 @@ public struct Configuration: Codable, Equatable, Sendable {
 
     public init() {}
 
+    private enum CodingKeys: String, CodingKey {
+        case version, apps, windowShortcuts, layout
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        apps = try container.decodeIfPresent([AppBinding].self, forKey: .apps) ?? []
+        layout = try container.decodeIfPresent(LayoutPreferences.self, forKey: .layout) ?? LayoutPreferences()
+        for (name, shortcut) in try container.decodeIfPresent([String: Shortcut].self, forKey: .windowShortcuts) ?? [:] {
+            guard let action = WindowAction(rawValue: name) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .windowShortcuts, in: container, debugDescription: "“\(name)” is not a window action."
+                )
+            }
+            windowShortcuts[action] = shortcut
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(apps, forKey: .apps)
+        try container.encode(layout, forKey: .layout)
+        let named = Dictionary(uniqueKeysWithValues: windowShortcuts.map { ($0.key.rawValue, $0.value) })
+        try container.encode(named, forKey: .windowShortcuts)
+    }
+
     /// Fills unassigned window actions with their defaults, skipping shortcuts already used elsewhere.
     public mutating func assignDefaultWindowShortcuts() {
         for (action, shortcut) in Shortcut.windowDefaults
         where windowShortcuts[action] == nil && owner(of: shortcut) == nil {
             windowShortcuts[action] = shortcut
         }
+    }
+
+    public var duplicateApp: String? {
+        for (index, app) in apps.enumerated() {
+            for earlier in apps[..<index] {
+                if earlier.bundleIdentifier == app.bundleIdentifier { return "\(app.name) is listed more than once." }
+                if earlier.id == app.id { return "\(earlier.name) and \(app.name) have the same id." }
+            }
+        }
+        return nil
     }
 
     public func owner(of shortcut: Shortcut, excludingApp: UUID? = nil, excludingAction: WindowAction? = nil) -> String? {
